@@ -1,70 +1,80 @@
 package com.zeml.ripplez_gt.jojoimp.stands.white_album.client.renderer;
 
-import com.github.standobyte.jojo.client.entityanim.playerbend.IPlayerBendModel;
-import com.github.standobyte.jojo.client.entityanim.playerbend.IPlayerLimbBend;
-import com.github.standobyte.v1_21_4_stuff.Reminder;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Iterables;
+import com.github.standobyte.jojo.client.ClientGlobals;
+import com.github.standobyte.jojo.client.entityrender.parsemodel.loader.RotpGeckoModelLoader;
+import com.github.standobyte.jojo.client.firstperson.FirstPersonModelLayer;
+import com.github.standobyte.jojo.client.standskin.StandSkinsLoader;
+import com.github.standobyte.jojo.mechanics.clothes.mannequin.MannequinEntity;
+import com.github.standobyte.jojo.powersystem.standpower.StandPower;
+import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.zeml.ripplez_gt.RipplesAddon;
+import com.zeml.ripplez_gt.init.power.AddonStands;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.ModelPart;
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.RenderLayerParent;
+import net.minecraft.client.renderer.entity.layers.RenderLayer;
+import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.client.resources.PlayerSkin;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.LivingEntity;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+public class WhiteAlbumLayer <T extends LivingEntity, M extends HumanoidModel<T>> extends RenderLayer<T, M> implements FirstPersonModelLayer {
+    WhiteAlbumModel purpleModel;
+    private final ResourceLocation HERMIT = ResourceLocation.tryBuild(RipplesAddon.MOD_ID,"textures/entity/stand/white_album.png");
 
-public class WhiteAlbumLayer extends HumanoidModel {
-    public final ModelPart rightArmSlim;
-    public final ModelPart leftArmSlim;
-
-    private static final String[] BASE_HUMANOID_PARTS = new String[] { "head", "body", "right_arm", "left_arm", "right_leg", "left_leg", "right_arm_slim", "left_arm_slim" };
-    protected static ModelPart addMissing(ModelPart root) {
-        for (String basePartName : BASE_HUMANOID_PARTS) {
-            root.children.putIfAbsent(basePartName, new ModelPart(new ArrayList<>(), new HashMap<>()));
-        }
-        Reminder.thatHatIsHeadChildNow();
-        root/*.getChild("head")*/.children.putIfAbsent("hat", new ModelPart(new ArrayList<>(), new HashMap<>()));
-        return root;
-    }
-    public WhiteAlbumLayer(ModelPart root) {
-        super(addMissing(root));
-        this.rightArmSlim = root.getChild("right_arm_slim");
-        this.leftArmSlim = root.getChild("left_arm_slim");
-        IPlayerBendModel thisBends = (IPlayerBendModel) this;
-        ((IPlayerLimbBend) (Object) rightArmSlim).jojo_ripples$setBendBone(thisBends.jojo_ripples$animRightArmBend(), false);
-        ((IPlayerLimbBend) (Object) leftArmSlim).jojo_ripples$setBendBone(thisBends.jojo_ripples$animLeftArmBend(), false);
+    public WhiteAlbumLayer(RenderLayerParent<T, M> renderer) {
+        super(renderer);
     }
 
-    public void setSlim(boolean slim){
-        if (slim) {
-            leftArm.visible = false;
-            rightArm.visible = false;
+    @Override
+    public void render(PoseStack poseStack, MultiBufferSource buffer, int packedLight, T t, float limbSwing, float limbSwingAmount, float partialTicks, float ageInTicks, float netHeadYaw, float headPitch) {
+        if(!ClientGlobals.canSeeStands || (t.isInvisible() && !(t instanceof MannequinEntity))){
+            return;
         }
-        else {
-            leftArmSlim.visible = false;
-            rightArmSlim.visible = false;
+
+        if(StandPower.getOptional(t).isPresent() && StandPower.get(t).getPowerType() == AddonStands.WHITE_ALBUM.get() && StandPower.get(t).isSummoned()){
+            boolean slim = t instanceof MannequinEntity mannequin && mannequin.isSlim() || t instanceof AbstractClientPlayer player && player.getSkin().model() == PlayerSkin.Model.SLIM;
+            ResourceLocation texture = StandSkinsLoader.getInstance().getSkin(StandPower.get(t)).getTexture(HERMIT);
+            M parentModel = getParentModel();
+            purpleModel = new WhiteAlbumModel(RotpGeckoModelLoader.getInstance().getModelDefinition(RipplesAddon.resLoc("white_album")).bakeRoot());
+            parentModel.copyPropertiesTo(purpleModel);
+            purpleModel.setSlim(slim);
+            purpleModel.poseLayer(parentModel);
+            VertexConsumer ivertexbuilder = buffer.getBuffer(RenderType.entityTranslucent(texture));
+            purpleModel.renderToBuffer(poseStack,ivertexbuilder,packedLight, OverlayTexture.NO_OVERLAY);
         }
     }
 
     @Override
-    protected Iterable<ModelPart> bodyParts() {
-        return Iterables.concat(super.bodyParts(), ImmutableList.of(rightArmSlim, leftArmSlim));
-    }
-    @Override
-    protected ModelPart getArm(HumanoidArm side) {
-        return switch (side) {
-            case LEFT -> !leftArm.visible && leftArmSlim.visible ? leftArmSlim : leftArm;
-            case RIGHT -> !rightArm.visible && rightArmSlim.visible ? rightArmSlim : rightArm;
-        };
-    }
+    public void renderHandFirstPerson(HumanoidArm humanoidArm, PoseStack poseStack, MultiBufferSource buffer, int packedLight, LivingEntity t, LivingEntityRenderer<?, ?> livingEntityRenderer) {
 
-    public void poseLayer(HumanoidModel<?> originalModel) {
-        this.head.copyFrom(originalModel.head);
-        this.body.copyFrom(originalModel.body);
-        this.rightArm.copyFrom(originalModel.rightArm);
-        this.leftArm.copyFrom(originalModel.leftArm);
-        this.rightArmSlim.copyFrom(originalModel.rightArm);
-        this.leftArmSlim.copyFrom(originalModel.leftArm);
-        this.rightLeg.copyFrom(originalModel.rightLeg);
-        this.leftLeg.copyFrom(originalModel.leftLeg);
+        boolean slim = t instanceof AbstractClientPlayer player && player.getSkin().model() == PlayerSkin.Model.SLIM;
+        ResourceLocation hermit = HERMIT;
+        if(StandPower.getOptional(t).isPresent() && StandPower.get(t).getPowerType() == AddonStands.WHITE_ALBUM.get() && StandPower.get(t).isSummoned()) {
+            ResourceLocation texture = StandSkinsLoader.getInstance().getSkin(StandPower.get(t)).getTexture(hermit);
+            purpleModel = new WhiteAlbumModel(RotpGeckoModelLoader.getInstance().getModelDefinition(RipplesAddon.resLoc("white_album")).bakeRoot());
+            purpleModel.setSlim(slim);
+            purpleModel.head.visible = false;
+            purpleModel.body.visible = false;
+            purpleModel.rightLeg.visible = false;
+            purpleModel.leftLeg.visible = false;
+            purpleModel.hat.visible = false;
+            purpleModel.poseLayer(getParentModel());
+            ModelPart arm = FirstPersonModelLayer.getArm(purpleModel, humanoidArm);
+            VertexConsumer iVertexBuilder = buffer.getBuffer(RenderType.entityCutoutNoCull(texture));
+            arm.xRot = 0.0F;
+            arm.render(poseStack, iVertexBuilder, packedLight, OverlayTexture.NO_OVERLAY);
+            ModelPart armSlim = humanoidArm == HumanoidArm.LEFT ? purpleModel.leftArmSlim : purpleModel.rightArmSlim;
+            armSlim.xRot = 0.0F;
+            armSlim.render(poseStack, iVertexBuilder, packedLight, OverlayTexture.NO_OVERLAY);
+            arm.render(poseStack, iVertexBuilder, packedLight, OverlayTexture.NO_OVERLAY);
+        }
+
     }
 }
